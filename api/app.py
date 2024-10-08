@@ -58,7 +58,7 @@ def predict_image():
             buffered = io.BytesIO()
             img_with_boxes.save(buffered, format="PNG")
             img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            img_base64 = "data:image/jpeg;base64" + img_base64 # adding header
+            img_base64 = "data:image/jpeg;base64," + img_base64 # adding header
 
             return jsonify({ 'prediction': predicted_class, 'image': img_base64 }), 200
 
