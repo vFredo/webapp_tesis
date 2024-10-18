@@ -27,12 +27,12 @@ class ResNet(ModelInterface):
     def __init__(self, model_path):
         super().__init__(model_path)
         self.name = "ResNet"
-        self.model = models.resnet18(pretrained=False)  # or resnet34, etc. depending on your model
-        self.model.fc = nn.Linear(self.model.fc.in_features, 3)  # Update output layer to match your classes
+        self.model = models.resnet18(pretrained=False)
+        self.model.fc = nn.Linear(self.model.fc.in_features, 3)
         self.model.load_state_dict(torch.load(self.model_path, map_location=torch.device('cpu')))
 
         self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),  # Redimensionar a 224x224
+            transforms.Resize((224, 224)), # Redimensionar a 224x224
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.repeat(3, 1, 1))  # Repetir el canal de grayscale para simular RGB
         ])
@@ -101,7 +101,7 @@ class Yolo(ModelInterface):
         self.name = "YOLO"
 
     def predict(self, image_path):
-        results = self.model.predict(image_path, verbose=False)  # Perform the prediction
+        results = self.model.predict(image_path, verbose=False)
         img_with_boxes = results[0].plot()  # Get the result with bounding boxes as a NumPy array
 
         # Convert the NumPy array to a PIL Image
@@ -109,8 +109,10 @@ class Yolo(ModelInterface):
 
         # Return both the PIL image and the prediction
         predicted_classes = results[0].boxes.cls.cpu().numpy()  # Get the predicted classes from YOLO
-        prediction = class_names[int(predicted_classes[0])] if predicted_classes else "No detection"
+        predicted_classes = int(predicted_classes[0]) if predicted_classes else -1
 
-        return img_with_boxes_pil, prediction  # Return the image as PIL.Image for saving
+        prediction = class_names[predicted_classes] if predicted_classes in class_names else "No detection"
+        print(predicted_classes)
 
+        return img_with_boxes_pil, prediction
 

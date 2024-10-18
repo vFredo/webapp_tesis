@@ -8,8 +8,10 @@ function App() {
   const [image, setImage] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string>('')
-  const [selectedModel, setSelectedModel] = useState<string>('')
   const [imageClass, setImageClass] = useState<string>('')
+  const [resNetPrediction, setResNetPrediction] = useState<string>('')
+  const [denseNetPrediction, setDenseNetPrediction] = useState<string>('')
+  const [yoloPrediction, setYoloPrediction] = useState<string>('')
 
   const onDrop = useCallback((acceptedFiles: File[], fileRejections: any[]) => {
     setError('')
@@ -28,6 +30,9 @@ function App() {
       setFile(file) // Save the file to send it to the backend
     }
     reader.readAsDataURL(file)
+    setResNetPrediction('')
+    setDenseNetPrediction('')
+    setYoloPrediction('')
   }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -39,28 +44,31 @@ function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!selectedModel || !imageClass || !image || !file) {
+    if (!imageClass || !image || !file) {
       setError('Por favor, completa todos los campos y sube una imagen.')
       return
     }
 
-    const formData = new FormData()
-    formData.append('file', file)
-    formData.append('model_use', selectedModel)
-
     try {
-      const response = await axios.post('http://127.0.0.1:5000/api/predict', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      // model calls from api
+      const modelCalls = ['resnet', 'densenet', 'yolo'].map((model) => {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('model_use', model)
+        return axios.post('http://127.0.0.1:5000/api/predict', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
       })
 
-      // You can handle the response here, like displaying the prediction
-      console.log('Prediction:', response.data.prediction)
-      if (selectedModel === "yolo"){
-        console.log('Image predicted: ', response.data.image)
-        setImage(response.data.image as string)
-      }
+      // Execute all requests in parallel
+      const [resnetRes, densenetRes, yoloRes] = await Promise.all(modelCalls)
+
+      // Set the predictions from the responses
+      setResNetPrediction(resnetRes.data.prediction)
+      setDenseNetPrediction(densenetRes.data.prediction)
+      setYoloPrediction(yoloRes.data.prediction)
+      setImage(yoloRes.data.image as string)
+
     } catch (error) {
       console.error('Error sending the request:', error)
       setError('Hubo un error al enviar la solicitud.')
@@ -73,25 +81,7 @@ function App() {
 
       {/* Formulario */}
       <form onSubmit={handleSubmit} className="w-full max-w-md space-y-4">
-        {/* Menú desplegable: Seleccionar modelo */}
-        <div>
-          <label htmlFor="model" className="block mb-2 text-sm font-medium text-gray-700">
-            Modelo a utilizar
-          </label>
-          <select
-            id="model"
-            value={selectedModel}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-          >
-            <option value="" disabled>Elige un modelo</option>
-            <option value="resnet">ResNet</option>
-            <option value="densenet">DenseNet</option>
-            <option value="yolo">YOLOv8</option>
-          </select>
-        </div>
-
-        {/* Menú desplegable: Tipo de imagen */}
+        {/* Menú desplegable: Clase de imagen */}
         <div>
           <label htmlFor="imageClass" className="block mb-2 text-sm font-medium text-gray-700">
             Clase de imagen
@@ -103,10 +93,10 @@ function App() {
             className="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
           >
             <option value="" disabled>Selecciona clase real de la imagen</option>
-            <option value="0">Trans-cerebeloso</option>
-            <option value="1">Trans-talámico</option>
-            <option value="2">Trans-ventricular</option>
-            <option value="3">Desconocido</option>
+            <option value="Trans-cerebeloso">Trans-cerebeloso</option>
+            <option value="Trans-talámico">Trans-talámico</option>
+            <option value="Trans-ventricular">Trans-ventricular</option>
+            <option value="Desconocido">Desconocido</option>
           </select>
         </div>
 
@@ -127,13 +117,6 @@ function App() {
 
         {error && <p className="text-red-500 mt-2 font-bold">{error}</p>}
 
-        {image && (
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold">Vista previa:</h3>
-            <img src={image} alt="Preview" className="mt-2 max-w-full border rounded-lg" />
-          </div>
-        )}
-
         {/* Botón de submit */}
         <button
           type="submit"
@@ -142,6 +125,48 @@ function App() {
           Enviar
         </button>
       </form>
+
+      {/* Image preview before predictions */}
+      {!resNetPrediction && !denseNetPrediction && !yoloPrediction && image && (
+        <div className="mt-6">
+          <h3 className="text-lg font-semibold">Imagen:</h3>
+          <img src={image} alt="Preview" className="mt-2 max-w-full border rounded-lg" />
+        </div>
+      )}
+
+      {/* Flex container for predictions and image after predictions */}
+      {(resNetPrediction || denseNetPrediction || yoloPrediction) && image && (
+        <div className="flex mt-6 w-full max-w-3xl">
+          {/* Left-hand side for predictions */}
+          <div className="w-1/3 p-4">
+            <h3 className="text-lg font-semibold mb-4">Prediccion modelos:</h3>
+            {resNetPrediction &&
+              <div>
+                <h1>ResNet: </h1>
+                <h2 className={`text-lg font-bold ${imageClass === resNetPrediction || imageClass === "Desconocido" ? "text-green-800" : "text-red-500"}`}>{resNetPrediction}</h2>
+              </div>
+            }
+            {denseNetPrediction &&
+              <div>
+                <h1>DenseNet: </h1>
+                <h2 className={`text-lg font-bold ${imageClass === denseNetPrediction || imageClass === "Desconocido" ? "text-green-800" : "text-red-500"}`}>{denseNetPrediction}</h2>
+              </div>
+            }
+            {yoloPrediction &&
+              <div>
+                <h1>YOLOv8</h1>
+                <h2 className={`text-lg font-bold ${imageClass === yoloPrediction || imageClass === "Desconocido" ? "text-green-800" : "text-red-500"}`}>{yoloPrediction}</h2>
+              </div>
+            }
+          </div>
+
+          {/* Right-hand side for the image */}
+          <div className="w-2/3 p-4">
+            <h3 className="text-lg font-semibold mb-2">Imagen:</h3>
+            <img src={image} alt="Preview" className="max-w-full border rounded-lg" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
